@@ -4,7 +4,6 @@
 
 
 #define MIN_CHUNK_SIZE  16
-#define MAX_CHUNK_COUNT 65536
 
 #define PTR_MOVE(ptr, bytes) (uint8_t*)(ptr) + (bytes)
 

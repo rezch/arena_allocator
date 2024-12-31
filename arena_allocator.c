@@ -11,8 +11,36 @@ static void mark_chunk(struct mem_arena_t *arena, struct chunk_t *chunk) {
     arena->ccnt++;
 }
 
+static struct chunk_t *add_chunk(struct mem_arena_t *arena) {
+    struct chunk_t *new_chunk = (struct chunk_t *) arena->head->mem;
+
+    arena->free_size -= sizeof(struct chunk_t);
+    arena->head->size -= sizeof(struct chunk_t);
+    arena->head->mem = PTR_MOVE(arena->head->mem, sizeof(struct chunk_t));
+
+    new_chunk->next = arena->head->next;
+    new_chunk->prev = arena->head;
+    arena->head->next = new_chunk;
+
+    return new_chunk;
+}
+
+static void pop_chunk(struct mem_arena_t *arena, struct chunk_t *chunk) {
+    if (chunk == arena->head || arena->head->used == 1 || chunk->next != 0) {
+        return;
+    }
+    arena->free_size += sizeof(struct chunk_t);
+    arena->head->size += sizeof(struct chunk_t);
+    arena->head->mem = PTR_MOVE_BACK(arena->head->mem, sizeof(struct chunk_t));
+
+    if (chunk->prev != 0) {
+        chunk->prev->next = 0;
+    }
+}
+
 static struct chunk_t *acquire_chunk(struct mem_arena_t *arena) {
-    const struct chunk_t *end = arena->chunks + arena->chunks_count * sizeof(struct chunk_t);
+    const struct chunk_t *end = (struct chunk_t *)
+            PTR_MOVE(arena->chunks, arena->ccnt * sizeof(struct chunk_t));
 
     if (arena->free_chunk < end && arena->free_chunk->alloc == 0) {
         mark_chunk(arena, arena->free_chunk);
@@ -27,12 +55,22 @@ static struct chunk_t *acquire_chunk(struct mem_arena_t *arena) {
         }
     }
 
+    if (arena->head->used == 0 && sizeof(struct chunk_t) <= arena->head->size) {
+        arena->free_chunk = add_chunk(arena);
+        mark_chunk(arena, arena->free_chunk);
+        return arena->free_chunk++;
+    }
+
     return NULL;
 }
 
 static void release_chunk(struct mem_arena_t *arena, struct chunk_t *chunk) {
     chunk->alloc = 0;
     arena->ccnt--;
+
+    if (chunk->next == NULL) {
+        pop_chunk(arena, chunk);
+    }
 }
 
 static struct chunk_t *merge_chunks(struct mem_arena_t *arena, struct chunk_t *lhs, struct chunk_t *rhs) {
@@ -93,17 +131,8 @@ struct mem_arena_t *arena_init(void *buf, size_t size) {
         return NULL;
     }
 
-    arena->chunks_count = size / (sizeof(struct chunk_t) + MIN_CHUNK_SIZE);
-    if (arena->chunks_count * sizeof(struct chunk_t) > size) {
-        arena->chunks_count = size / sizeof(struct chunk_t);
-    }
+    arena->ccnt = 1;
     arena->chunks = (struct chunk_t *) buf;
-
-    for (struct chunk_t *chunk = arena->chunks; chunk < arena->chunks + arena->chunks_count; ++chunk) {
-        chunk->alloc = 0;
-    }
-
-    arena->ccnt = 0;
     arena->free_chunk = arena->chunks;
     arena->head = acquire_chunk(arena);
 
@@ -112,11 +141,10 @@ struct mem_arena_t *arena_init(void *buf, size_t size) {
         return NULL;
     }
 
-    arena->free_size = size - arena->chunks_count * sizeof(struct chunk_t);
-    arena->buf = PTR_MOVE(buf, arena->chunks_count * sizeof(struct chunk_t));
+    arena->free_size = size - arena->ccnt * sizeof(struct chunk_t);
 
     arena->head->size = arena->free_size;
-    arena->head->mem = arena->buf;
+    arena->head->mem = PTR_MOVE(buf, arena->ccnt * sizeof(struct chunk_t));
 
     return arena;
 }

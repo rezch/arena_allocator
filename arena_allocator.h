@@ -6,6 +6,7 @@
 #define MIN_CHUNK_SIZE  16
 
 #define PTR_MOVE(ptr, bytes) (uint8_t*)(ptr) + (bytes)
+#define PTR_MOVE_BACK(ptr, bytes) (uint8_t*)(ptr) - (bytes)
 
 
 struct chunk_t {
@@ -18,16 +19,18 @@ struct chunk_t {
 };
 
 struct mem_arena_t {
-    int             ccnt;
+    size_t          ccnt;
     struct chunk_t  *head;
     size_t          free_size;
-    void            *buf;
-    size_t          chunks_count;
     struct chunk_t  *chunks;
     struct chunk_t  *free_chunk;
 };
 
 static void mark_chunk(struct mem_arena_t *arena, struct chunk_t *chunk);
+
+static struct chunk_t *add_chunk(struct mem_arena_t *arena);
+
+static void pop_chunk(struct mem_arena_t *arena, struct chunk_t *chunk);
 
 static struct chunk_t *acquire_chunk(struct mem_arena_t *arena);
 

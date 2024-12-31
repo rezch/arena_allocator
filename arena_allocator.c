@@ -97,7 +97,7 @@ struct mem_arena_t *arena_init(void *buf, size_t size) {
     if (arena->chunks_count * sizeof(struct chunk_t) > size) {
         arena->chunks_count = size / sizeof(struct chunk_t);
     }
-    arena->chunks = buf;
+    arena->chunks = (struct chunk_t *) buf;
 
     for (struct chunk_t *chunk = arena->chunks; chunk < arena->chunks + arena->chunks_count; ++chunk) {
         chunk->alloc = 0;
@@ -113,9 +113,9 @@ struct mem_arena_t *arena_init(void *buf, size_t size) {
     }
 
     arena->free_size = size - arena->chunks_count * sizeof(struct chunk_t);
-    arena->buf = buf + arena->chunks_count * sizeof(struct chunk_t);
+    arena->buf = PTR_MOVE(buf, arena->chunks_count * sizeof(struct chunk_t));
 
-    arena->head->size = size;
+    arena->head->size = arena->free_size;
     arena->head->mem = arena->buf;
 
     return arena;
